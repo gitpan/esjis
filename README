@@ -1,0 +1,48 @@
+NAME
+       Sjis - allows you to write your script in ShiftJIS again
+
+SYNOPSIS
+           jperl55   yourscript.pl  param1  param2 ...
+           jperl510  yourscript.pl  param1  param2 ...
+
+DESCRIPTION
+       The "Sjis" software provides the interfaces between Perl's
+       strings and the rest of the system.  Perl strings are
+       sequences of characters also bytes.
+
+       This software is still a concept code to get <YOUR> help.
+
+INSTALLATION
+
+To install this software, type the following:
+
+   perl Makefile.PL
+   make.bat
+   make.bat test
+   make.bat install
+
+PROGRAM COMPOSITION
+
+    jperl55.bat  --- jperl emulator by perl5.5 with esjis.pl
+    jperl510.bat --- jperl emulator by perl5.10 with esjis.pl
+    perl510.bat  --- find and run perl5.10 without %PATH% settings
+    pl2ebat      --- escape and wrap ShiftJIS perl code into a batch file
+    esjis.pl     --- source code filter to escape ShiftJIS
+
+DEPENDENCIES
+
+This software requires perl5.00503 or later and perl5.010.
+
+LICENSE AND COPYRIGHT
+
+This software is free software; you can redistribute it and/or
+modify it under the same terms as Perl itself. See L<perlartistic>.
+
+This software is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+
+MAINTAINER
+
+This project was originated by INABA Hitoshi <ina@cpan.org>.
+
