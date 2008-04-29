@@ -1,16 +1,18 @@
 NAME
-       Sjis - allows you to write your script in ShiftJIS again
+       Esjis - Source code filter to escape ShiftJIS
 
 SYNOPSIS
-           jperl55   yourscript.pl  param1  param2 ...
-           jperl510  yourscript.pl  param1  param2 ...
+           jperl55      yourscript.pl  param1  param2 ...
+           jperl510     yourscript.pl  param1  param2 ...
+           perl         esjis.pl  ShiftJIS_script.pl  >  Escaped_script.pl.e
+           pl2ebat.bat  ShiftJIS_script.pl
 
 DESCRIPTION
-       The "Sjis" software provides the interfaces between Perl's
+       This software provides the interfaces between Perl's
        strings and the rest of the system.  Perl strings are
        sequences of characters also bytes.
 
-       This software is still a concept code to get <YOUR> help.
+       This software is still a concept code.
 
 INSTALLATION
 
@@ -36,7 +38,7 @@ This software requires perl5.00503 or later and perl5.010.
 LICENSE AND COPYRIGHT
 
 This software is free software; you can redistribute it and/or
-modify it under the same terms as Perl itself. See L<perlartistic>.
+modify it under the same terms as Perl itself. See perlartistic.
 
 This software is distributed in the hope that it will be useful,
 but WITHOUT ANY WARRANTY; without even the implied warranty of

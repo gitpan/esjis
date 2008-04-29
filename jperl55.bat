@@ -48,6 +48,12 @@ for (@ARGV) {
     }
     else {
 
+        # if new *.e file exists
+        if ((-e "$_.e") and ((stat("$_.e"))[9] > (stat($_))[9])) {
+            $_ = "$_.e";
+            last;
+        }
+
         # make temp filename
         do {
             $tmpnam = sprintf('%s.%d.%d', $_, time, rand(10000));
@@ -77,4 +83,33 @@ else {
 }
 
 __END__
+
+=head1 NAME
+
+jperl55 - execute ShiftJIS perlscript on the perl5.5
+
+=head1 SYNOPSIS
+
+B<jperl55> [perlscript.pl]
+
+=head1 DESCRIPTION
+
+This utility converts a ShiftJIS perl script into a escaped script that
+can be executed by original perl5.5 on DOS-like operating systems.
+
+If the up-to-date escaped file already exists, it is not made again.
+
+=head1 EXAMPLES
+
+    C:\> jperl55 foo.pl
+    [..creates foo.pl.e and execute it..]
+
+=head1 BUGS
+
+=head1 SEE ALSO
+
+perl, esjis.pl
+
+=cut
+
 :endofperl

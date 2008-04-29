@@ -48,6 +48,12 @@ for (@ARGV) {
     }
     else {
 
+        # if new *.e file exists
+        if ((-e "$_.e") and ((stat("$_.e"))[9] > (stat($_))[9])) {
+            $_ = "$_.e";
+            last;
+        }
+
         # make temp filename
         do {
             $tmpnam = sprintf('%s.%d.%d', $_, time, rand(10000));
@@ -77,4 +83,36 @@ else {
 }
 
 __END__
+
+=head1 NAME
+
+jperl510 - execute ShiftJIS perlscript on the perl5.10
+
+=head1 SYNOPSIS
+
+B<jperl510> [perlscript.pl]
+
+=head1 DESCRIPTION
+
+This utility converts a ShiftJIS perl script into a escaped script that
+can be executed by original perl5.10 on DOS-like operating systems.
+
+If the up-to-date escaped file already exists, it is not made again.
+
+When running perl is not version 5.10, the escaped script will execute
+by perl510.bat.
+
+=head1 EXAMPLES
+
+    C:\> jperl510 foo.pl
+    [..creates foo.pl.e and execute it..]
+
+=head1 BUGS
+
+=head1 SEE ALSO
+
+perl, esjis.pl, perl510.bat
+
+=cut
+
 :endofperl

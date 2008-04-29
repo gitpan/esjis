@@ -132,4 +132,32 @@ elsif (@drive > 1) {
 }
 
 __END__
+
+=head1 NAME
+
+perl510 - execute perlscript on the perl5.10 without %PATH% settings
+
+=head1 SYNOPSIS
+
+B<perl510> [perlscript.pl]
+
+=head1 DESCRIPTION
+
+It finds, and executes perl5.10 without setting environment variable %PATH%.
+
+This utility is convenient to make perl5.5 coexist with perl5.10.
+
+=head1 EXAMPLES
+
+    C:\> perl510 foo.pl
+    [..execute foo.pl by perl5.10..]
+
+=head1 BUGS
+
+=head1 SEE ALSO
+
+perl
+
+=cut
+
 :endofperl

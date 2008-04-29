@@ -9,3 +9,6 @@ Revision history for Perl extension Esjis.
 0.12  2008/04/27 00:00:00
 	- rename Sjis to esjis, remove some limitations; created by INABA Hitoshi
 
+0.13  2008/04/30 00:00:00
+	- remove some limitations and many bugs; created by INABA Hitoshi
+

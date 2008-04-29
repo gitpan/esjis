@@ -10,7 +10,7 @@ use strict;
 use 5.00503;
 
 use vars qw($VERSION);
-$VERSION = sprintf '%d.%02d', q$Revision: 0.12 $ =~ m/(\d+)/xmsg;
+$VERSION = sprintf '%d.%02d', q$Revision: 0.13 $ =~ m/(\d+)/xmsg;
 
 use constant DEBUG => 1;
 local $SIG{__WARN__} = sub { die 'esjis: ', @_ } if DEBUG;
@@ -76,9 +76,11 @@ my $q_angle    = qr{(?{local $nest=0}) (?>(?:
                                         \>   (?(?{$nest>0})(?{$nest--})|(?!)))*) (?(?{$nest!=0})(?!))
                  }xms;
 
+my $eof         = 0;     # end of file
+my $tr_variable = '';    # variable of tr///
+my $slash       = 'm//'; # '/' means regexp match 'm//' and '?' means regexp match '??'
+
 # When this script is main program
-my $eof = 0;
-my $tr_variable = '';
 if ($0 eq __FILE__) {
 
     # show usage
@@ -97,6 +99,12 @@ END
         exit 0;
     }
     else {
+        if (m/(.+#line \d+\n)/msgc) {
+            my $head = $1;
+            $head =~ s/\bjperl\b/perl/gi;
+            print $head;
+        }
+
         print <<'END_OF_DECLARE';
 #
 # ShiftJIS function declare
@@ -115,6 +123,7 @@ sub Sjis::reverse(@);
 sub _charlist_tr(@);
 
 END_OF_DECLARE
+
     }
 
     # while all script
@@ -157,29 +166,39 @@ sub escape() {
                 return $space1 . $space2;
             }
             else {
+                $slash = 'm//';
                 return $variable . $space1 . '=~' . $space2;
             }
         }
         else {
+            $slash = 'div';
             return $variable . $space1;
         }
     }
 
 # functions of package Sjis
-    elsif (m{\G \b (CORE::(?:split|chop|index|rindex|lc|uc|chr|ord|reverse)) \b }xgc) { return $1; }
-    elsif (m{\G \b split (\s* \( \s*) m\s*(\S)\2 }xgc) { return "Sjis::Split$1''";  }
-    elsif (m{\G \b split (\s* \( \s*) //         }xgc) { return "Sjis::Split$1''";  }
-    elsif (m{\G \b split (\s*)        m\s*(\S)\2 }xgc) { return "Sjis::Split$1''";  }
-    elsif (m{\G \b split (\s*)        //         }xgc) { return "Sjis::Split$1''";  }
-    elsif (m{\G \b split \b                      }xgc) { return 'Sjis::Split';      }
-    elsif (m{\G \b chop \b                       }xgc) { return 'Sjis::Chop';       }
-    elsif (m{\G \b index \b                      }xgc) { return 'Sjis::index';      }
-    elsif (m{\G \b rindex \b                     }xgc) { return 'Sjis::rindex';     }
-    elsif (m{\G \b lc \b                         }xgc) { return 'Sjis::lc';         }
-    elsif (m{\G \b uc \b                         }xgc) { return 'Sjis::uc';         }
-    elsif (m{\G \b chr \b                        }xgc) { return 'Sjis::chr';        }
-    elsif (m{\G \b ord \b                        }xgc) { return 'Sjis::ord';        }
-    elsif (m{\G \b reverse \b                    }xgc) { return 'Sjis::reverse';    }
+    elsif (m{\G \b (CORE::(?:split|chop|index|rindex|lc|uc|chr|ord|reverse)) \b }xgc) { $slash = 'm//'; return $1;  }
+    elsif (m{\G \b split (\s* \( \s*) m\s*(\S)\2          }xgc) { $slash = 'm//'; return   "Sjis::Split$1''";   }
+    elsif (m{\G \b split (\s* \( \s*) //                  }xgc) { $slash = 'm//'; return   "Sjis::Split$1''";   }
+    elsif (m{\G \b split (\s*)        m\s*(\S)\2          }xgc) { $slash = 'm//'; return   "Sjis::Split$1''";   }
+    elsif (m{\G \b split (\s*)        //                  }xgc) { $slash = 'm//'; return   "Sjis::Split$1''";   }
+    elsif (m{\G \b split (\s* \( \s*) m\s*([ -?]\+?)\2    }xgc) { $slash = 'm//'; return   "Sjis::Split$1'$2'"; }
+    elsif (m{\G \b split (\s* \( \s*) /([ -?]\+?)/        }xgc) { $slash = 'm//'; return   "Sjis::Split$1'$2'"; }
+    elsif (m{\G \b split (\s*)        m\s*([ -?]\+?)\2    }xgc) { $slash = 'm//'; return   "Sjis::Split$1'$2'"; }
+    elsif (m{\G \b split (\s*)        /([ -?]\+?)/        }xgc) { $slash = 'm//'; return   "Sjis::Split$1'$2'"; }
+    elsif (m{\G \b split (\s* \( \s*) m\s*(\\[nrtf]\+?)\2 }xgc) { $slash = 'm//'; return qq{Sjis::Split$1"$2"}; }
+    elsif (m{\G \b split (\s* \( \s*) /(\\[nrtf]\+?)/     }xgc) { $slash = 'm//'; return qq{Sjis::Split$1"$2"}; }
+    elsif (m{\G \b split (\s*)        m\s*(\\[nrtf]\+?)\2 }xgc) { $slash = 'm//'; return qq{Sjis::Split$1"$2"}; }
+    elsif (m{\G \b split (\s*)        /(\\[nrtf]\+?)/     }xgc) { $slash = 'm//'; return qq{Sjis::Split$1"$2"}; }
+    elsif (m{\G \b split \b                               }xgc) { $slash = 'm//'; return   'Sjis::Split';       }
+    elsif (m{\G \b chop \b                                }xgc) { $slash = 'm//'; return   'Sjis::Chop';        }
+    elsif (m{\G \b index \b                               }xgc) { $slash = 'm//'; return   'Sjis::index';       }
+    elsif (m{\G \b rindex \b                              }xgc) { $slash = 'm//'; return   'Sjis::rindex';      }
+    elsif (m{\G \b lc \b                                  }xgc) { $slash = 'm//'; return   'Sjis::lc';          }
+    elsif (m{\G \b uc \b                                  }xgc) { $slash = 'm//'; return   'Sjis::uc';          }
+    elsif (m{\G \b chr \b                                 }xgc) { $slash = 'm//'; return   'Sjis::chr';         }
+    elsif (m{\G \b ord \b                                 }xgc) { $slash = 'm//'; return   'Sjis::ord';         }
+    elsif (m{\G \b reverse \b                             }xgc) { $slash = 'm//'; return   'Sjis::reverse';     }
 
 # tr/// or y///
     elsif (/\G \b (tr|y) \b /xgc) {
@@ -319,6 +338,26 @@ sub escape() {
                 elsif (/\G (\<) ((?:$qq_angle)*?)   (\>) /xgc) { return $e . &e_qx($ope,$1,$3,$2); }
                 elsif (/\G (\') ((?:$qq_char)*?)    (\') /xgc) { return $e . &e_q ($ope,$1,$3,$2); } #'
                 elsif (/\G (\S) ((?:$qq_char)*?)    (\1) /xgc) { return $e . &e_qx($ope,$1,$3,$2); }
+            }
+            die "esjis: operator $ope can't find delimiter.\n";
+        }
+    }
+
+# qw//
+    elsif (/\G \b (qw) \b /xgc) {
+        my $ope = $1;
+        if (/\G (\#) (.*?) (\#) /xmsgc) {
+            return &e_qw($ope,$1,$3,$2);
+        }
+        else {
+            my $e = '';
+            while (not /\G \z/xgc) {
+                if (/\G (\s+|\#.*) /xgc) { $e .= $1; }
+                elsif (/\G (\() (.*?) (\)) /xmsgc) { return $e . &e_qw($ope,$1,$3,$2); }
+                elsif (/\G (\{) (.*?) (\}) /xmsgc) { return $e . &e_qw($ope,$1,$3,$2); }
+                elsif (/\G (\[) (.*?) (\]) /xmsgc) { return $e . &e_qw($ope,$1,$3,$2); }
+                elsif (/\G (\<) (.*?) (\>) /xmsgc) { return $e . &e_qw($ope,$1,$3,$2); }
+                elsif (/\G (\S) (.*?) (\1) /xmsgc) { return $e . &e_qw($ope,$1,$3,$2); }
             }
             die "esjis: operator $ope can't find delimiter.\n";
         }
@@ -469,18 +508,28 @@ sub escape() {
 # ``
     elsif (/\G (\`) ((?:$qq_char)*?) (\`) /xgc)                  { return &e_qx('',$1,$3,$2); }
 
-# //
-    elsif (/\G (\/) ((?:$qq_char)*?) (\/) ([a-z]*) /xgc)         { return &e_m ('', $1,$3,$2,$4); }
+# //   --- not divide operator (num / num)
+    elsif (($slash eq 'm//') and
+           /\G (\/) ((?:$qq_char)*?) (\/) ([a-z]*) /xgc)         { return &e_m ('', $1,$3,$2,$4); }
 
-# ??
-    elsif (/\G (\?) ((?:$qq_char)*?) (\?) ([a-z]*) /xgc)         { return &e_m ('', $1,$3,$2,$4); }
+# ??   --- not three item operator (condition ? true : false)
+    elsif (($slash eq 'm//') and
+           /\G (\?) ((?:$qq_char)*?) (\?) ([a-z]*) /xgc)         { return &e_m ('', $1,$3,$2,$4); }
 
 # <<
     elsif (/\G (?= << ) /xmsgc) {
+
+# << (bit shift)
+        if (/\G ( << \s* [0-9\$\@\&] ) /xgc)                     { $slash = 'm//'; return $1; }
+
         my $e = '';
         my @delimiter = ();
         my %quote_type = ();
-        while (not /\G \z/xgc) {
+
+        # koko hredoc はその行の各要素によって、m// か / かが変わる。まさに再帰処理が必要
+        $slash = 'm//';
+
+        while (not /\G $ /xmgc) {
 
 # <<'HEREDOC'
             if (/\G ( << '([a-zA-Z_0-9]*)' ) /xgc) {
@@ -570,8 +619,35 @@ sub escape() {
 # __END__
     elsif (/\G ^ (__END__  \n .*) \z /xmsgc) { $eof = 1; return &package_Sjis() . $1; }
 
+    # any operator
+    elsif (/\G (
+
+            != | !~ | ! |
+            %= | % |
+            &&= | && | &= | & |
+            -- | -= | -> | -[rwxoRWXOezsfdlpSbctugkTBMAC] | - |
+            : |
+            <<= | <=> | <= | < |
+            == | => | =~ | = |
+            >>= | >> | >= | > |
+            \*\*= | \*\* | \*= | \* |
+            \+\+ | \+= | \+ |
+            \.\.\. | \.\. | \.= | \. |
+            \/= | \/ |
+            \? |
+            \\ |
+            \^= | \^ |
+            \bx= |
+            \|\|= | \|\| | \|= | \| |
+            ~ |
+            \b(?: and | cmp | eq | ge | gt | le | lt | ne | not | or | x | xor )\b |
+
+            [,;\(\{\[]
+
+                       ) /xgc) { $slash = 'm//'; return $1; }
+
     # other any character
-    elsif (/\G ($q_char) /xgc) { return $1; }
+    elsif (/\G ($q_char) /xgc) { $slash = 'div'; return $1; }
 
     # system error
     else {
@@ -586,6 +662,8 @@ sub e_tr($$$$$) {
     my($tr_variable,$charclass,$e,$charclass2,$option) = @_;
     $option ||= '';
 
+    $slash = 'div';
+
     if ($tr_variable eq '') {
         return qq{Sjis::trans(\$_,'$charclass',$e'$charclass2','$option')};
     }
@@ -599,6 +677,8 @@ sub e_tr($$$$$) {
 #
 sub e_q($$$$) {
     my($ope,$delimiter,$end_delimiter,$string) = @_;
+
+    $slash = 'div';
 
     my @char = $string =~ m/ \G ([\x81-\x9F\xE0-\xFC][\x00-\xFF]|[^\x81-\x9F\xE0-\xFC]) /xmsg;
     for (my $i=0; $i <= $#char-1; $i++) {
@@ -617,6 +697,8 @@ sub e_q($$$$) {
 #
 sub e_qq($$$$) {
     my($ope,$delimiter,$end_delimiter,$string) = @_;
+
+    $slash = 'div';
 
     my $metachar = {
         'qq' => qr/[\@\\]/xms,
@@ -678,6 +760,8 @@ sub e_qq($$$$) {
 sub e_qx($$$$) {
     my($ope,$delimiter,$end_delimiter,$string) = @_;
 
+    $slash = 'div';
+
     my $metachar = {
         'qx' => qr/[\@\\|]/xms,
         ''   => qr/[\@\\|]/xms,
@@ -733,10 +817,24 @@ sub e_qx($$$$) {
 }
 
 #
+# escape qw string (qw//)
+#
+sub e_qw($$$$) {
+    my($ope,$delimiter,$end_delimiter,$string) = @_;
+
+    $slash = 'div';
+
+    # return string
+    return join '', $ope, $delimiter, $string, $end_delimiter;
+}
+
+#
 # escape here document (<<"HEREDOC", <<HEREDOC, <<`HEREDOC`)
 #
 sub e_heredoc($) {
     my($string) = @_;
+
+    $slash = 'm//';
 
     my $metachar = qr/[\@\\|]/xms; # '|' is for <<`HEREDOC`
 
@@ -795,6 +893,8 @@ sub e_heredoc($) {
 sub e_m($$$$$) {
     my($ope,$delimiter,$end_delimiter,$string,$option) = @_;
     $option ||= '';
+
+    $slash = 'div';
 
     my $metachar = {
         'm' => qr/[\@\\|[\]{]/xms,
@@ -941,7 +1041,7 @@ sub e_m($$$$$) {
         }
 
         # $scalar or @array
-        elsif ($char[$i] =~ m/\A [\$\@] /xms) {
+        elsif ($char[$i] =~ m/\A [\$\@].+ /xms) {
             if ($option =~ m/i/xms) {
                 $char[$i] = '@{[Sjis::ignorecase(' . $char[$i] . ')]}';
             }
@@ -1007,6 +1107,8 @@ sub e_m($$$$$) {
 sub e_m_q($$$$$) {
     my($ope,$delimiter,$end_delimiter,$string,$option) = @_;
     $option ||= '';
+
+    $slash = 'div';
 
     # split regexp
     my @char = $string =~ m{\G(
@@ -1124,6 +1226,8 @@ sub e_m_q($$$$$) {
 sub e_s($$$$$) {
     my($ope,$delimiter,$end_delimiter,$string,$option) = @_;
     $option ||= '';
+
+    $slash = 'div';
 
     my $metachar = {
         's' => qr/[\@\\|[\]{]/xms,
@@ -1274,7 +1378,7 @@ sub e_s($$$$$) {
         }
 
         # $scalar or @array
-        elsif ($char[$i] =~ m/\A [\$\@] /xms) {
+        elsif ($char[$i] =~ m/\A [\$\@].+ /xms) {
             if ($option =~ m/i/xms) {
                 $char[$i] = '@{[Sjis::ignorecase(' . $char[$i] . ')]}';
             }
@@ -1339,6 +1443,8 @@ sub e_s($$$$$) {
 sub e_s_q($$$$$) {
     my($ope,$delimiter,$end_delimiter,$string,$option) = @_;
     $option ||= '';
+
+    $slash = 'div';
 
     # split regexp
     my @char = $string =~ m{\G(
@@ -1477,6 +1583,8 @@ sub e_s_qq($$$$$) {
     my($ope,$delimiter,$end_delimiter,$string,$option) = @_;
     $option ||= '';
 
+    $slash = 'div';
+
     my $metachar = {
         's' => qr/[\@\\]/xms,
     }->{$ope} || die "esjis: system error (e_s_qq)";
@@ -1547,6 +1655,8 @@ sub e_s_q2($$$$$) {
     my($ope,$delimiter,$end_delimiter,$string,$option) = @_;
     $option ||= '';
 
+    $slash = 'div';
+
     my @char = $string =~ m/ \G ([\x81-\x9F\xE0-\xFC][\x00-\xFF]|[^\x81-\x9F\xE0-\xFC]) /xmsg;
     for (my $i=0; $i <= $#char-1; $i++) {
         if (($char[$i] =~ m/\A ([\x81-\x9F\xE0-\xFC]) \\ \z/xms) and
@@ -1566,6 +1676,8 @@ sub e_s_q2($$$$$) {
 sub e_qr($$$$$) {
     my($ope,$delimiter,$end_delimiter,$string,$option) = @_;
     $option ||= '';
+
+    $slash = 'div';
 
     my $metachar = {
         'qr' => qr/[\@\\|[\]{]/xms,
@@ -1711,7 +1823,7 @@ sub e_qr($$$$$) {
         }
 
         # $scalar or @array
-        elsif ($char[$i] =~ m/\A [\$\@] /xms) {
+        elsif ($char[$i] =~ m/\A [\$\@].+ /xms) {
             if ($option =~ m/i/xms) {
                 $char[$i] = '@{[Sjis::ignorecase(' . $char[$i] . ')]}';
             }
@@ -1777,6 +1889,8 @@ sub e_qr($$$$$) {
 sub e_qr_q($$$$$) {
     my($ope,$delimiter,$end_delimiter,$string,$option) = @_;
     $option ||= '';
+
+    $slash = 'div';
 
     # split regexp
     my @char = $string =~ m{\G(
@@ -2902,12 +3016,22 @@ Esjis - Source code filter to escape ShiftJIS
   ShiftJIS_script.pl  --- script written in ShiftJIS
   Escaped_script.pl.e --- escaped script
 
-=head1 BACKWARD COMPATIBILITY
+=head1 ABSTRACT
+
+Let's start with a bit of history: jperl 4.036+1.4 introduced ShiftJIS support.
+You could apply chop() and regexps even to complex CJK characters -- so long as
+the script was written in ShiftJIS.
+
+Since Perl5.8, Encode module is supported for multilingual processing, and it was
+said that jperl became unnecessary. But is it really so?
+
+The UTF-8 is still rare on the Microsoft Windows -- most popular operating systems
+we love, so many users hope to write scripts in ShiftJIS encodings; without giving
+up a whole new feature of Perl5.8/5.10.
 
 The ShiftJIS was developed in order to maintain backward compatibility. In general,
-the operating systems and the programming language keep old interface.
-
-To maintain backward compatibility is a effective solution still now.
+the operating systems and the programming language keep old interface. To maintain
+backward compatibility is a effective solution still now.
 
 Shall we escape from the encode problem?
 
@@ -2918,8 +3042,7 @@ JPerl is very useful software.
 Because it is Perl interpreter who can handle Japanese on the Microsoft Windows.
 However, the last version of JPerl is 5.005_03 and is not maintained now.
 
-A lot of persons hope to get new version of JPerl. So I made this software, I had
-thought that I wanted to solve the problem.
+So I made this software, I had thought that I wanted to solve the problem.
 
 This software is a source code filter to escape Perl script encoded by ShiftJIS.
 It outputs it to STDOUT escaping in the script given from STDIN or command line
@@ -2935,14 +3058,15 @@ This approach is suitable for the following case.
 
 =item * To handle real length of character string
 
-=item * To don't handle flag and functions not related to programming #'
+=item * To don't handle flag and functions not related to programming
 
 =item * Unnecessary internationalization programming
 
+=item * To don't handle program written by C language
+
 =back
 
-This software is still a pre-alpha version for expressing a concept to get <YOUR>
-help.
+This software is still a pre-alpha version for expressing a concept.
 
 =head1 SOFTWARE COMPOSITION
 
