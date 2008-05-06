@@ -49,7 +49,7 @@ for (@ARGV) {
     else {
 
         # if new *.e file exists
-        if ((-e "$_.e") and ((stat("$_.e"))[9] > (stat($_))[9])) {
+        if ((-e "$_.e") and ((stat("$_.e"))[9] > (stat($_))[9]) and ((stat("$_.e"))[9] > (stat('esjis.pl'))[9])) {
             $_ = "$_.e";
             last;
         }

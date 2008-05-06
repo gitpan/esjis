@@ -2,9 +2,14 @@ NAME
        Esjis - Source code filter to escape ShiftJIS
 
 SYNOPSIS
-           jperl55      yourscript.pl  param1  param2 ...
-           jperl510     yourscript.pl  param1  param2 ...
-           perl         esjis.pl  ShiftJIS_script.pl  >  Escaped_script.pl.e
+           jperl55  yourscript.pl  param1  param2 ...
+
+           jperl58  yourscript.pl  param1  param2 ...
+
+           jperl510  yourscript.pl  param1  param2 ...
+
+           perl  esjis.pl  ShiftJIS_script.pl  >  Escaped_script.pl.e
+
            pl2ebat.bat  ShiftJIS_script.pl
 
 DESCRIPTION
@@ -26,6 +31,8 @@ To install this software, type the following:
 PROGRAM COMPOSITION
 
     jperl55.bat  --- jperl emulator by perl5.5 with esjis.pl
+    jperl58.bat  --- jperl emulator by perl5.8 with esjis.pl
+    perl58.bat   --- find and run perl5.8 without %PATH% settings
     jperl510.bat --- jperl emulator by perl5.10 with esjis.pl
     perl510.bat  --- find and run perl5.10 without %PATH% settings
     pl2ebat      --- escape and wrap ShiftJIS perl code into a batch file

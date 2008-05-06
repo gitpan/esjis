@@ -15,7 +15,7 @@ goto endofperl
 $VERSION = "1.0.0"; undef @rem;
 ######################################################################
 #
-# jperl55 -  execute ShiftJIS perlscript on the perl5.5
+# jperl58 -  execute ShiftJIS perlscript on the perl5.8
 #
 # Copyright (c) 2008 INABA Hitoshi <ina@cpan.org>
 #
@@ -44,7 +44,7 @@ for (@ARGV) {
     next if /^-/; # skip command line option
 
     if (not -e $_) {
-        die "jperl55: script $_ is not exists.";
+        die "jperl58: script $_ is not exists.";
     }
     else {
 
@@ -65,7 +65,7 @@ for (@ARGV) {
         }
         else {
             unlink $tmpnam;
-            die "jperl55: Can't execute script: $_";
+            die "jperl58: Can't execute script: $_";
         }
     }
 
@@ -74,41 +74,44 @@ for (@ARGV) {
     last;
 }
 
-# if this script running under perl5.5
-if ($] =~ /^5\.005/) {
+# if this script running under perl5.8
+if ($] =~ /^5\.010/) {
     exit system($^X, @ARGV);
 }
 else {
-    die "jperl55: nothing perl5.5.\n";
+    exit system('perl58.bat', @ARGV);
 }
 
 __END__
 
 =head1 NAME
 
-jperl55 - execute ShiftJIS perlscript on the perl5.5
+jperl58 - execute ShiftJIS perlscript on the perl5.8
 
 =head1 SYNOPSIS
 
-B<jperl55> [perlscript.pl]
+B<jperl58> [perlscript.pl]
 
 =head1 DESCRIPTION
 
 This utility converts a ShiftJIS perl script into a escaped script that
-can be executed by original perl5.5 on DOS-like operating systems.
+can be executed by original perl5.8 on DOS-like operating systems.
 
 If the up-to-date escaped file already exists, it is not made again.
 
+When running perl is not version 5.8, the escaped script will execute
+by perl58.bat.
+
 =head1 EXAMPLES
 
-    C:\> jperl55 foo.pl
+    C:\> jperl58 foo.pl
     [..creates foo.pl.e and execute it..]
 
 =head1 BUGS
 
 =head1 SEE ALSO
 
-perl, esjis.pl
+perl, esjis.pl, perl58.bat
 
 =cut
 
