@@ -10,7 +10,7 @@ use strict;
 use 5.00503;
 
 use vars qw($VERSION);
-$VERSION = sprintf '%d.%02d', q$Revision: 0.14 $ =~ m/(\d+)/oxmsg;
+$VERSION = sprintf '%d.%02d', q$Revision: 0.15 $ =~ m/(\d+)/oxmsg;
 
 use constant DEBUG => 1;
 local $SIG{__WARN__} = sub { die 'esjis: ', @_ } if DEBUG;
@@ -25,9 +25,10 @@ BEGIN {
 }
 
 # regexp of character
-my $qq_char = qr/[^\\\x81-\x9F\xE0-\xFC]|[\\\x81-\x9F\xE0-\xFC][\x00-\xFF]|\\[\x81-\x9F\xE0-\xFC][\x00-\xFF]/oxms;
-my  $q_char = qr/[^\x81-\x9F\xE0-\xFC]|[\x81-\x9F\xE0-\xFC][\x00-\xFF]/oxms;
-my $chargap = q{\G(?:[\x81-\x9F\xE0-\xFC]{2})*?|[^\x81-\x9F\xE0-\xFC](?:[\x81-\x9F\xE0-\xFC]{2})*?};
+my $qq_char   = qr/[^\\\x81-\x9F\xE0-\xFC]|[\\\x81-\x9F\xE0-\xFC][\x00-\xFF]|\\[\x81-\x9F\xE0-\xFC][\x00-\xFF]/oxms;
+my  $q_char   = qr/[^\x81-\x9F\xE0-\xFC]|[\x81-\x9F\xE0-\xFC][\x00-\xFF]/oxms;
+my $sjis_char = q{[^\x81-\x9F\xE0-\xFC]|[\x81-\x9F\xE0-\xFC][\x00-\xFF]};
+my $sjis_gap  = q{\G(?:[\x81-\x9F\xE0-\xFC]{2})*?|[^\x81-\x9F\xE0-\xFC](?:[\x81-\x9F\xE0-\xFC]{2})*?};
 
 # regexp of nested parens in qqXX
 my $qq_paren   = qr{(?{local $nest=0}) (?>(?:
@@ -90,11 +91,13 @@ my $q_angle    = qr{(?{local $nest=0}) (?>(?:
                                         \>   (?(?{$nest>0})(?{$nest--})|(?!)))*) (?(?{$nest!=0})(?!))
                  }xms;
 
-my $eof         = 0;     # end of file
-my $tr_variable = '';    # variable of tr///
-my $slash       = 'm//'; # '/' means regexp match 'm//' and '?' means regexp match '??'
-my %heredoc     = ();    # here document
-my $heredoc_qq  = 0;     # here document quote type
+my $eof          = 0;     # end of file
+my $tr_variable1 = '';    # variable of ($scalar = ...) =~ tr///
+my $tr_variable2 = '';    # variable of  $scalar        =~ tr///
+my $tr_variable  = '';    # variable of                    tr///
+my $slash        = 'm//'; # '/' means regexp match 'm//' and '?' means regexp match '??'
+my %heredoc      = ();    # here document
+my $heredoc_qq   = 0;     # here document quote type
 
 # When this script is main program
 if ($0 eq __FILE__) {
@@ -125,9 +128,9 @@ END
 #
 # ShiftJIS function declare
 #
-sub Sjis::Split(;$$$);
+sub Sjis::split(;$$$);
 sub Sjis::tr($$$;$);
-sub Sjis::Chop(;@);
+sub Sjis::chop(;@);
 sub Sjis::index($$;$);
 sub Sjis::rindex($$;$);
 sub Sjis::lc(;@);
@@ -156,9 +159,9 @@ sub escape() {
 
 # \n output here document
     if (/\G ( \n ) /oxgc) {
-        $slash = 'm//';
         my $heredoc = '';
         if (scalar(keys %heredoc) >= 1) {
+            $slash = 'm//';
             my($long_heredoc_delimiter) = sort { length($heredoc{$b}) <=> length($heredoc{$a}) } keys %heredoc;
             if ($heredoc_qq >= 1) {
                 $heredoc = &e_heredoc($heredoc{$long_heredoc_delimiter});
@@ -179,37 +182,39 @@ sub escape() {
 # ignore space, comment
     elsif (/\G (\s+|\#.*) /oxgc) { return $1; }
 
+# scalar variable ($scalar = ...) =~ tr///;
+    elsif (/\G ( \( \s* (?: local \s+ | my \s+ | our \s+ )? ( \$ $qq_scalar ) ) /oxgc) {
+        my $e_string  = &e_string($1);
+        $tr_variable1 = &e_string($2);
+        $slash = 'div';
+        return $e_string;
+    }
+
 # scalar variable $scalar =~ tr///;
     elsif (/\G ( \$ $qq_scalar ) /oxgc) {
-        my $variable = $1;
-        $tr_variable = '';
-        my $space1 = '';
-        while (/\G (\s+|\#.*) /oxgc) {
-            $space1 .= $1;
-        }
-        if (/\G =~ /oxgc) {
-            my $space2 = '';
-            while (/\G (\s+|\#.*) /oxgc) {
-                $space2 .= $1;
-            }
-            if (/\G \b (?= tr|y) \b /oxgc) {
-                $tr_variable = &e_string($variable);
-                $space1 = '' if $space1 eq ' ';
-                $space2 = '' if $space2 eq ' ';
-                $slash = 'm//';
-                return $space1 . $space2;
-            }
-            else {
-                my $e_string = &e_string($variable) . $space1 . '=~' . $space2;
-                $slash = 'm//';
-                return $e_string;
-            }
-        }
-        else {
-            my $e_string = &e_string($variable) . $space1;
-            $slash = 'div';
-            return $e_string;
-        }
+        $tr_variable2 = &e_string($1);
+        my $e_string  = &e_string($1);
+        $slash = 'div';
+        return $e_string;
+    }
+
+# =~ tr ...
+    elsif (/\G ( =~ \s* ) (?= (?: tr|y) \b ) /oxgc) {
+        $slash = 'm//';
+        $tr_variable = ($tr_variable1 || $tr_variable2);
+        return ', ';
+    }
+
+    # any operator
+    elsif (/\G ( [,;] ) /oxgc) {
+        $slash = 'm//';
+
+        # clear tr variable
+        $tr_variable  = '';
+        $tr_variable1 = '';
+        $tr_variable2 = '';
+
+        return $1;
     }
 
 # variable or function
@@ -227,20 +232,20 @@ sub escape() {
 
 # functions of package Sjis
     elsif (m{\G \b (CORE::(?:split|chop|index|rindex|lc|uc|chr|ord|reverse)) \b }oxgc) { $slash = 'm//'; return $1;  }
-    elsif (m{\G \b split (\s* \( \s*) m\s*(\S)\2          }oxgc) { $slash = 'm//'; return   "Sjis::Split$1''";   }
-    elsif (m{\G \b split (\s* \( \s*) //                  }oxgc) { $slash = 'm//'; return   "Sjis::Split$1''";   }
-    elsif (m{\G \b split (\s*)        m\s*(\S)\2          }oxgc) { $slash = 'm//'; return   "Sjis::Split$1''";   }
-    elsif (m{\G \b split (\s*)        //                  }oxgc) { $slash = 'm//'; return   "Sjis::Split$1''";   }
-    elsif (m{\G \b split (\s* \( \s*) m\s*([ -?]\+?)\2    }oxgc) { $slash = 'm//'; return   "Sjis::Split$1'$2'"; }
-    elsif (m{\G \b split (\s* \( \s*) /([ -?]\+?)/        }oxgc) { $slash = 'm//'; return   "Sjis::Split$1'$2'"; }
-    elsif (m{\G \b split (\s*)        m\s*([ -?]\+?)\2    }oxgc) { $slash = 'm//'; return   "Sjis::Split$1'$2'"; }
-    elsif (m{\G \b split (\s*)        /([ -?]\+?)/        }oxgc) { $slash = 'm//'; return   "Sjis::Split$1'$2'"; }
-    elsif (m{\G \b split (\s* \( \s*) m\s*(\\[nrtf]\+?)\2 }oxgc) { $slash = 'm//'; return qq{Sjis::Split$1"$2"}; }
-    elsif (m{\G \b split (\s* \( \s*) /(\\[nrtf]\+?)/     }oxgc) { $slash = 'm//'; return qq{Sjis::Split$1"$2"}; }
-    elsif (m{\G \b split (\s*)        m\s*(\\[nrtf]\+?)\2 }oxgc) { $slash = 'm//'; return qq{Sjis::Split$1"$2"}; }
-    elsif (m{\G \b split (\s*)        /(\\[nrtf]\+?)/     }oxgc) { $slash = 'm//'; return qq{Sjis::Split$1"$2"}; }
-    elsif (m{\G \b split \b   (?! \s* => )                }oxgc) { $slash = 'm//'; return   'Sjis::Split';       }
-    elsif (m{\G \b chop \b    (?! \s* => )                }oxgc) { $slash = 'm//'; return   'Sjis::Chop';        }
+    elsif (m{\G \b split (\s* \( \s*) m\s*(\S)\2          }oxgc) { $slash = 'm//'; return   "Sjis::split$1''";   }
+    elsif (m{\G \b split (\s* \( \s*) //                  }oxgc) { $slash = 'm//'; return   "Sjis::split$1''";   }
+    elsif (m{\G \b split (\s*)        m\s*(\S)\2          }oxgc) { $slash = 'm//'; return   "Sjis::split$1''";   }
+    elsif (m{\G \b split (\s*)        //                  }oxgc) { $slash = 'm//'; return   "Sjis::split$1''";   }
+    elsif (m{\G \b split (\s* \( \s*) m\s*([ -?]\+?)\2    }oxgc) { $slash = 'm//'; return   "Sjis::split$1'$2'"; }
+    elsif (m{\G \b split (\s* \( \s*) /([ -?]\+?)/        }oxgc) { $slash = 'm//'; return   "Sjis::split$1'$2'"; }
+    elsif (m{\G \b split (\s*)        m\s*([ -?]\+?)\2    }oxgc) { $slash = 'm//'; return   "Sjis::split$1'$2'"; }
+    elsif (m{\G \b split (\s*)        /([ -?]\+?)/        }oxgc) { $slash = 'm//'; return   "Sjis::split$1'$2'"; }
+    elsif (m{\G \b split (\s* \( \s*) m\s*(\\[nrtf]\+?)\2 }oxgc) { $slash = 'm//'; return qq{Sjis::split$1"$2"}; }
+    elsif (m{\G \b split (\s* \( \s*) /(\\[nrtf]\+?)/     }oxgc) { $slash = 'm//'; return qq{Sjis::split$1"$2"}; }
+    elsif (m{\G \b split (\s*)        m\s*(\\[nrtf]\+?)\2 }oxgc) { $slash = 'm//'; return qq{Sjis::split$1"$2"}; }
+    elsif (m{\G \b split (\s*)        /(\\[nrtf]\+?)/     }oxgc) { $slash = 'm//'; return qq{Sjis::split$1"$2"}; }
+    elsif (m{\G \b split \b   (?! \s* => )                }oxgc) { $slash = 'm//'; return   'Sjis::split';       }
+    elsif (m{\G \b chop \b    (?! \s* => )                }oxgc) { $slash = 'm//'; return   'Sjis::chop';        }
     elsif (m{\G \b index \b   (?! \s* => )                }oxgc) { $slash = 'm//'; return   'Sjis::index';       }
     elsif (m{\G \b rindex \b  (?! \s* => )                }oxgc) { $slash = 'm//'; return   'Sjis::rindex';      }
     elsif (m{\G \b lc \b      (?! \s* => )                }oxgc) { $slash = 'm//'; return   'Sjis::lc';          }
@@ -338,7 +343,9 @@ sub escape() {
         }
 
         # clear tr variable
-        $tr_variable = '';
+        $tr_variable  = '';
+        $tr_variable1 = '';
+        $tr_variable2 = '';
     }
 
 # q//
@@ -742,8 +749,13 @@ sub e_string($) {
 E_STRING_LOOP:
     while ($string !~ /\G \z/oxgc) {
 
+# bare word
+        if ($string =~ /\G ( \{ \s* (?: tr | index | rindex | reverse ) \s* \} ) /oxmsgc) {
+            $e_string .= $1;
+        }
+
 # variable
-        if ($string =~ /\G ( (?: [\$\@\%\&\*] | \$\# | -> ) \s* (?: split | chop | index | rindex | lc | uc | chr | ord | reverse | tr | y | q | qq | qx | qw | m | s | qr ) ) \b /oxmsgc) {
+        elsif ($string =~ /\G ( (?: [\$\@\%\&\*] | \$\# | -> ) \s* (?: split | chop | index | rindex | lc | uc | chr | ord | reverse | tr | y | q | qq | qx | qw | m | s | qr ) ) \b /oxmsgc) {
             $e_string .= $1;
         }
         elsif ($string =~ /\G ( \$\$ | \$\@ | \$\# | \$\\ | \$\' | \$\" | \$\` | \$\/ | \$\? | \$\( | \$\) | \$\[ | \$\] | \$\< | \$\> ) /oxmsgc) {
@@ -752,20 +764,20 @@ E_STRING_LOOP:
 
 # functions of package Sjis
         elsif ($string =~ m{\G \b (CORE::(?:split|chop|index|rindex|lc|uc|chr|ord|reverse)) \b }oxgc) { $e_string .= $1;  }
-        elsif ($string =~ m{\G \b split (\s* \( \s*) m\s*(\S)\2          }oxgc) { $e_string .=   "Sjis::Split$1''";   }
-        elsif ($string =~ m{\G \b split (\s* \( \s*) //                  }oxgc) { $e_string .=   "Sjis::Split$1''";   }
-        elsif ($string =~ m{\G \b split (\s*)        m\s*(\S)\2          }oxgc) { $e_string .=   "Sjis::Split$1''";   }
-        elsif ($string =~ m{\G \b split (\s*)        //                  }oxgc) { $e_string .=   "Sjis::Split$1''";   }
-        elsif ($string =~ m{\G \b split (\s* \( \s*) m\s*([ -?]\+?)\2    }oxgc) { $e_string .=   "Sjis::Split$1'$2'"; }
-        elsif ($string =~ m{\G \b split (\s* \( \s*) /([ -?]\+?)/        }oxgc) { $e_string .=   "Sjis::Split$1'$2'"; }
-        elsif ($string =~ m{\G \b split (\s*)        m\s*([ -?]\+?)\2    }oxgc) { $e_string .=   "Sjis::Split$1'$2'"; }
-        elsif ($string =~ m{\G \b split (\s*)        /([ -?]\+?)/        }oxgc) { $e_string .=   "Sjis::Split$1'$2'"; }
-        elsif ($string =~ m{\G \b split (\s* \( \s*) m\s*(\\[nrtf]\+?)\2 }oxgc) { $e_string .= qq{Sjis::Split$1"$2"}; }
-        elsif ($string =~ m{\G \b split (\s* \( \s*) /(\\[nrtf]\+?)/     }oxgc) { $e_string .= qq{Sjis::Split$1"$2"}; }
-        elsif ($string =~ m{\G \b split (\s*)        m\s*(\\[nrtf]\+?)\2 }oxgc) { $e_string .= qq{Sjis::Split$1"$2"}; }
-        elsif ($string =~ m{\G \b split (\s*)        /(\\[nrtf]\+?)/     }oxgc) { $e_string .= qq{Sjis::Split$1"$2"}; }
-        elsif ($string =~ m{\G \b split \b                               }oxgc) { $e_string .=   'Sjis::Split';       }
-        elsif ($string =~ m{\G \b chop \b                                }oxgc) { $e_string .=   'Sjis::Chop';        }
+        elsif ($string =~ m{\G \b split (\s* \( \s*) m\s*(\S)\2          }oxgc) { $e_string .=   "Sjis::split$1''";   }
+        elsif ($string =~ m{\G \b split (\s* \( \s*) //                  }oxgc) { $e_string .=   "Sjis::split$1''";   }
+        elsif ($string =~ m{\G \b split (\s*)        m\s*(\S)\2          }oxgc) { $e_string .=   "Sjis::split$1''";   }
+        elsif ($string =~ m{\G \b split (\s*)        //                  }oxgc) { $e_string .=   "Sjis::split$1''";   }
+        elsif ($string =~ m{\G \b split (\s* \( \s*) m\s*([ -?]\+?)\2    }oxgc) { $e_string .=   "Sjis::split$1'$2'"; }
+        elsif ($string =~ m{\G \b split (\s* \( \s*) /([ -?]\+?)/        }oxgc) { $e_string .=   "Sjis::split$1'$2'"; }
+        elsif ($string =~ m{\G \b split (\s*)        m\s*([ -?]\+?)\2    }oxgc) { $e_string .=   "Sjis::split$1'$2'"; }
+        elsif ($string =~ m{\G \b split (\s*)        /([ -?]\+?)/        }oxgc) { $e_string .=   "Sjis::split$1'$2'"; }
+        elsif ($string =~ m{\G \b split (\s* \( \s*) m\s*(\\[nrtf]\+?)\2 }oxgc) { $e_string .= qq{Sjis::split$1"$2"}; }
+        elsif ($string =~ m{\G \b split (\s* \( \s*) /(\\[nrtf]\+?)/     }oxgc) { $e_string .= qq{Sjis::split$1"$2"}; }
+        elsif ($string =~ m{\G \b split (\s*)        m\s*(\\[nrtf]\+?)\2 }oxgc) { $e_string .= qq{Sjis::split$1"$2"}; }
+        elsif ($string =~ m{\G \b split (\s*)        /(\\[nrtf]\+?)/     }oxgc) { $e_string .= qq{Sjis::split$1"$2"}; }
+        elsif ($string =~ m{\G \b split \b                               }oxgc) { $e_string .=   'Sjis::split';       }
+        elsif ($string =~ m{\G \b chop \b                                }oxgc) { $e_string .=   'Sjis::chop';        }
         elsif ($string =~ m{\G \b index \b                               }oxgc) { $e_string .=   'Sjis::index';       }
         elsif ($string =~ m{\G \b rindex \b                              }oxgc) { $e_string .=   'Sjis::rindex';      }
         elsif ($string =~ m{\G \b lc \b                                  }oxgc) { $e_string .=   'Sjis::lc';          }
@@ -1332,10 +1344,10 @@ sub e_m($$$$$) {
     my $re;
     $option =~ tr/i//d;
     if ($left_e > $right_e) {
-        $re = join '', $ope, $delimiter, $chargap, @char, '>]}' x ($left_e - $right_e), $end_delimiter, $option;
+        $re = join '', $ope, $delimiter, $sjis_gap, @char, '>]}' x ($left_e - $right_e), $end_delimiter, $option;
     }
     else {
-        $re = join '', $ope, $delimiter, $chargap, @char,                               $end_delimiter, $option;
+        $re = join '', $ope, $delimiter, $sjis_gap, @char,                               $end_delimiter, $option;
     }
     return $re;
 }
@@ -1440,7 +1452,7 @@ sub e_m_q($$$$$) {
     }
 
     $option =~ tr/i//d;
-    return join '', $ope, $delimiter, $chargap, @char, $end_delimiter, $option;
+    return join '', $ope, $delimiter, $sjis_gap, @char, $end_delimiter, $option;
 }
 
 #
@@ -1637,10 +1649,10 @@ sub e_s($$$$$) {
     # make regexp string
     my $re;
     if ($left_e > $right_e) {
-        $re = join '', $ope, $delimiter, qq{\\G((?:$q_char)*?)}, @char, '>]}' x ($left_e - $right_e), $end_delimiter;
+        $re = join '', $ope, $delimiter, qq{\\G((?:$sjis_char)*?)}, @char, '>]}' x ($left_e - $right_e), $end_delimiter;
     }
     else {
-        $re = join '', $ope, $delimiter, qq{\\G((?:$q_char)*?)}, @char, $end_delimiter;
+        $re = join '', $ope, $delimiter, qq{\\G((?:$sjis_char)*?)}, @char, $end_delimiter;
     }
     return $re;
 }
@@ -1761,7 +1773,7 @@ sub e_s_q($$$$$) {
             $char[$i-1] = '(?:' . $char[$i-1] . ')';
         }
     }
-    return join '', $ope, $delimiter, qq{\\G((?:$q_char)*?)}, @char, $end_delimiter;
+    return join '', $ope, $delimiter, qq{\\G((?:$sjis_char)*?)}, @char, $end_delimiter;
 }
 
 #
@@ -2048,10 +2060,10 @@ sub e_qr($$$$$) {
     my $re;
     $option =~ tr/i//d;
     if ($left_e > $right_e) {
-        $re = join '', $ope, $delimiter, $chargap, @char, '>]}' x ($left_e - $right_e), $end_delimiter, $option;
+        $re = join '', $ope, $delimiter, $sjis_gap, @char, '>]}' x ($left_e - $right_e), $end_delimiter, $option;
     }
     else {
-        $re = join '', $ope, $delimiter, $chargap, @char,                               $end_delimiter, $option;
+        $re = join '', $ope, $delimiter, $sjis_gap, @char,                               $end_delimiter, $option;
     }
     return $re;
 }
@@ -2156,7 +2168,7 @@ sub e_qr_q($$$$$) {
     }
 
     $option =~ tr/i//d;
-    return join '', $ope, $delimiter, $chargap, @char, $end_delimiter, $option;
+    return join '', $ope, $delimiter, $sjis_gap, @char, $end_delimiter, $option;
 }
 
 #
@@ -2631,7 +2643,7 @@ package Sjis;
 #
 # ShiftJIS split
 #
-sub Sjis::Split(;$$$) {
+sub Sjis::split(;$$$) {
 
     if (@_ == 0) {
         return CORE::split;
@@ -2679,32 +2691,32 @@ sub Sjis::Split(;$$$) {
                 return $_[1];
             }
             else {
-                my @Split = $_[1] =~ m/\G ([\x81-\x9F\xE0-\xFC][\x00-\xFF] | [\x00-\xFF])/oxmsg;
-                if (scalar(@Split) < $_[2]) {
+                my @split = $_[1] =~ m/\G ([\x81-\x9F\xE0-\xFC][\x00-\xFF] | [\x00-\xFF])/oxmsg;
+                if (scalar(@split) < $_[2]) {
                     if (wantarray) {
-                        return      @Split, '';
+                        return      @split, '';
                     }
                     else {
                         warn 'Use of implicit split to @_ is deprecated' if $^W;
-                        return @_ = @Split, '';
+                        return @_ = @split, '';
                     }
                 }
-                elsif (scalar(@Split) == $_[2]) {
+                elsif (scalar(@split) == $_[2]) {
                     if (wantarray) {
-                        return      @Split;
+                        return      @split;
                     }
                     else {
                         warn 'Use of implicit split to @_ is deprecated' if $^W;
-                        return @_ = @Split;
+                        return @_ = @split;
                     }
                 }
                 else {
                     if (wantarray) {
-                        return      @Split[0..$_[2]-2], join '', @Split[$_[2]-1..$#Split];
+                        return      @split[0..$_[2]-2], join '', @split[$_[2]-1..$#split];
                     }
                     else {
                         warn 'Use of implicit split to @_ is deprecated' if $^W;
-                        return @_ = @Split[0..$_[2]-2], join '', @Split[$_[2]-1..$#Split];
+                        return @_ = @split[0..$_[2]-2], join '', @split[$_[2]-1..$#split];
                     }
                 }
             }
@@ -2805,22 +2817,22 @@ sub Sjis::tr($$$;$) {
 #
 # ShiftJIS chop
 #
-sub Sjis::Chop(;@) {
+sub Sjis::chop(;@) {
 
-    my $Chop;
+    my $chop;
     if (@_ == 0) {
         my @char = m/\G ([\x81-\x9F\xE0-\xFC][\x00-\xFF] | [^\x81-\x9F\xE0-\xFC])/oxmsg;
-        $Chop = pop @char;
+        $chop = pop @char;
         $_ = join '', @char;
     }
     else {
         for my $string (@_) {
             my @char = $string =~ m/\G ([\x81-\x9F\xE0-\xFC][\x00-\xFF] | [^\x81-\x9F\xE0-\xFC]) /oxmsg;
-            $Chop = pop @char;
+            $chop = pop @char;
             $string = join '', @char;
         }
     }
-    return $Chop;
+    return $chop;
 }
 
 #
@@ -3323,7 +3335,7 @@ This approach is suitable for the following case.
 
 =back
 
-This software is still a pre-alpha version for expressing a concept.
+This software is still an alpha version for expressing a concept.
 
 =head1 SOFTWARE COMPOSITION
 
@@ -3447,7 +3459,7 @@ It is the same as the function of original Perl.
 
 =head1 BUGS AND LIMITATIONS
 
-This software is still a pre-alpha version for expressing a concept.
+This software is still an alpha version for expressing a concept.
 I write test code from now.
 
 Please test code, patches and report problems to author are welcome.
@@ -3743,7 +3755,7 @@ See also code table:
 Final octet of string like first octet of double octet code
 
 Even if malformed, it is not ignored and not deleted automatically.
-For example, Sjis::Chop function returns this octet.
+For example, Sjis::chop function returns this octet.
 
    0 1 2 3 4 5 6 7 8 9 A B C D E F 
   +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+

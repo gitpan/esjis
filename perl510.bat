@@ -132,6 +132,7 @@ elsif (@drive > 1) {
 }
 
 __END__
+=pod
 
 =head1 NAME
 
@@ -152,7 +153,27 @@ This utility is convenient to make perl5.5 coexist with perl5.10.
     C:\> perl510 foo.pl
     [..execute foo.pl by perl5.10..]
 
-=head1 BUGS
+=head1 BUGS AND LIMITATIONS
+
+This software is still an alpha version for expressing a concept.
+Please test code, patches and report problems to author are welcome.
+
+=head1 AUTHOR
+
+INABA Hitoshi E<lt>ina@cpan.orgE<gt>
+
+This project was originated by INABA Hitoshi.
+For any questions, use E<lt>ina@cpan.orgE<gt> so we can share
+this file.
+
+=head1 LICENSE AND COPYRIGHT
+
+This software is free software; you can redistribute it and/or
+modify it under the same terms as Perl itself. See L<perlartistic>.
+
+This software is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
 
 =head1 SEE ALSO
 

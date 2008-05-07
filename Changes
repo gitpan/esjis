@@ -15,3 +15,6 @@ Revision history for Perl extension Esjis.
 0.14  2008/05/06 00:00:00
 	- remove many bugs and add jperl58.bat, perl58.bat; created at Cafe CORONA in Akihabara
 
+0.15  2008/05/07 00:00:00
+	- remove some limitations; created at COUNTRY FARM CAFE in Ueno
+

@@ -251,6 +251,15 @@ Default behavior is to invoke Perl with the B<-S> flag, so Perl will
 search the PATH to find the script.   This may have undesirable
 effects.
 
+=head1 LICENSE AND COPYRIGHT
+
+This software is free software; you can redistribute it and/or
+modify it under the same terms as Perl itself. See L<perlartistic>.
+
+This software is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+
 =head1 SEE ALSO
 
 perl, perlwin32, runperl.bat, esjis.pl

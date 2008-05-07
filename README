@@ -17,16 +17,18 @@ DESCRIPTION
        strings and the rest of the system.  Perl strings are
        sequences of characters also bytes.
 
-       This software is still a concept code.
+       This software is still an alpha version for expressing a concept.
 
 INSTALLATION
 
 To install this software, type the following:
 
-   perl Makefile.PL
+   perl Makefile.PL    --- Makefile.PL makes "make.bat" only, and ...
    make.bat
    make.bat test
    make.bat install
+   make.bat dist       --- make distribution package
+   make.bat tar.bat    --- make perl script "tar.bat"
 
 PROGRAM COMPOSITION
 
